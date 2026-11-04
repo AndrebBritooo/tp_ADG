@@ -1,0 +1,5 @@
+PL06, Computação Visual. Descompactem esta pasta dentro da pasta do projeto do grupo, ao lado dos vossos ficheiros .py.
+01-ponto-de-partida.py é o programa com que acaba a PL05 (secção 6 do guião PL05, afinar para a sala) e o ponto de partida da secção 1 do guião PL06: uv run 01-ponto-de-partida.py assets
+Os programas que se seguem gravam evidencias/ e registo.json na pasta de onde se correm.
+assets/zona1_cadeira/, assets/zona2_cadeira_azul/ e assets/zona3_cadeira_pequena/ são 48 PNG cada, com canal alfa; são variantes da mesma cadeira (cor e tamanho), só para a aula ter três objetos que se distinguem à vista.
+No projeto, cada zona leva o objeto que o vosso grupo modelou e renderizou no Blender: substituam estas pastas pelas vossas, com o mesmo formato de nome (zonaN_nome).
