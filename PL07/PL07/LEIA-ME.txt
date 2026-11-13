@@ -1,0 +1,5 @@
+PL07, Computação Visual. Descompactem esta pasta onde quiserem: não precisa de ficar dentro do projeto de grupo.
+exemplos/yolov12-demo.py é a demonstração de deteção de objetos com YOLO da aula teórica. Corre-se na pasta do zip com: uv run exemplos/yolov12-demo.py (câmara 0), ou com --camera e um vídeo ou uma ligação. q ou Esc para sair, m para espelhar a imagem.
+Da primeira vez, o uv instala o PyTorch e o Ultralytics, que ocupam cerca de 1 GB depois de instalados (no Linux e no WSL, vários GB, com as bibliotecas da NVIDIA), e o programa descarrega o modelo yolo12n.pt (cerca de 6 MB) para esta pasta. Façam-no em casa ou na rede da universidade, antes da aula.
+Sem placa gráfica NVIDIA, o modelo corre no processador; o número no canto da janela diz quantas imagens por segundo conseguem. Com --model yolo12s.pt o modelo é maior, mais preciso e mais lento.
+O YOLO não entra no projeto de grupo: lá, a deteção é só de visão clássica.

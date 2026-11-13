@@ -4,20 +4,12 @@
 # dependencies = [
 #   "numpy",
 #   "opencv-python>=5.0,<6",
+#   "rich",
 # ]
 # ///
-"""PL06, secção 1: o ponto de partida, que é o programa da secção 6 da PL05 (afinar para a sala).
+from datetime import datetime
+from rich import console
 
-    uv run 01-ponto-de-partida.py [pasta dos assets] [indice da camara]
-
-Os valores bons numa sala não são os bons noutra. Aqui há duas maneiras de os mudar sem tocar no código:
-
-- os **cursores** da PL04, no cimo da janela, para experimentar ao vivo: o limiar da diferença, a percentagem
-  da zona que tem de estar a branco para ela acender, e a paragem;
-- um **ficheiro `config.json`** ao lado do programa, que se lê no arranque e se grava com a tecla `g`. Leva
-  também as **zonas**, a lista de RoIs `[x, y, largura, altura]`. É o que fica no repositório do grupo, e é o
-  que se leva para a demonstração.
-"""
 import json
 import pathlib
 import sys
@@ -35,6 +27,8 @@ LADO = 160
 AREA_MINIMA = 500              # só para desenhar as caixas
 VERDE, AMARELO = (0, 255, 0), (0, 255, 255)
 JANELA = "afinar"
+consola = console.Console(log_path=False)
+
 
 
 def carrega():
@@ -76,6 +70,40 @@ def confere(zonas, largura, altura):
             sys.exit(f"A zona {n} {(x, y, w, h)} sai da imagem de {largura} x {altura}. "
                      f"Corrijam as zonas no {CONFIG}.")
 
+def toca(caixa, zona):
+    """Verifica se uma caixa de movimento toca uma zona. A caixa é (x, y, w, h) e a zona é (x, y, w, h)."""
+    x, y, w, h = caixa
+    zx, zy, zw, zh = zona
+
+    return(
+        x < zx + zw 
+        and zx < x + w
+        and y < zy + zh
+        and zy < y + h
+    )
+
+def comeca(z, caixas):
+    """inicia um evento de movimento."""
+    inicio = datetime.now()
+
+    evento = {
+        "inicio": inicio,
+        "caixas": caixas
+    }
+
+    consola.log(f"[green]Zona {z + 1} iniciou movimento às {inicio.strftime('%H:%M:%S')} com {len(caixas)} caixas.")
+    return evento
+
+def acaba(z, evento):
+    """Termina um evento de movimento."""
+    duracao = (
+        datetime.now() - evento["inicio"]
+    ).total_seconds()
+
+    consola.log(
+        f"[yellow]zona {z + 1}[/]: acabou, {duracao:.1f} s"
+    )
+
 
 valores = carrega()
 zonas = [tuple(int(v) for v in roi) for roi in valores["zonas"]]
@@ -87,7 +115,7 @@ if len(pastas) != len(zonas):
     sys.exit(f"Há {len(zonas)} zonas no {CONFIG} e {len(pastas)} pastas em "
              f"{raiz}: tem de haver uma pasta por zona.")
 sequencias = [le_sequencia(p) for p in pastas]
-print("configuração:", valores)
+consola.log("configuração:", valores)
 
 cv.namedWindow(JANELA)
 cv.createTrackbar("limiar", JANELA, valores["limiar"], 100, lambda v: None)
@@ -102,6 +130,7 @@ camara.set(cv.CAP_PROP_FRAME_HEIGHT, 480)
 
 i = [0] * len(zonas)
 quietos = [valores["paragem"]] * len(zonas)
+eventos = [None] * len(zonas)
 anterior = None
 while True:
     ok, fotograma = camara.read()
@@ -114,7 +143,7 @@ while True:
     confere(zonas, largura, altura)
 
     suave = cv.GaussianBlur(cv.cvtColor(fotograma, cv.COLOR_BGR2GRAY), (21, 21), 0)
-    acesas = set()
+    acesas, caixas = set(), []
     if anterior is not None:
         _, limiar = cv.threshold(cv.absdiff(anterior, suave), valores["limiar"],
                                  255, cv.THRESH_BINARY)
@@ -125,14 +154,39 @@ while True:
                 acesas.add(z)
         contornos, _ = cv.findContours(mascara, cv.RETR_EXTERNAL,
                                        cv.CHAIN_APPROX_SIMPLE)
-        for contorno in contornos:                 # a caixa é só para desenhar
+        for contorno in contornos:
             if cv.contourArea(contorno) >= AREA_MINIMA:
-                x, y, w, h = cv.boundingRect(contorno)
-                cv.rectangle(fotograma, (x, y), (x + w, y + h), AMARELO, 2)
+                caixas.append(cv.boundingRect(contorno))
+
+        for x, y, w, h in caixas:
+            cv.rectangle(
+                fotograma,
+                (x, y),
+                (x + w, y + h),
+                AMARELO,
+                2
+            )
     anterior = suave
 
-    for z, (x, y, w, h) in enumerate(zonas):
+
+    for z, zona in enumerate(zonas):
+        x, y, w, h = zona
+
         quietos[z] = 0 if z in acesas else quietos[z] + 1
+
+        # Iniciar o evento quando a zona deteta movimento
+        if z in acesas and eventos[z] is None:
+            caixas_zona = [
+                caixa for caixa in caixas
+                if toca(caixa, zona)
+            ]
+            eventos[z] = comeca(z, caixas_zona)
+
+        # Terminar o evento após os frames de paragem
+        if eventos[z] is not None and quietos[z] >= valores["paragem"]:
+            acaba(z, eventos[z])
+            eventos[z] = None
+
         if quietos[z] < valores["paragem"]:
             objeto = sequencias[z][i[z] % len(sequencias[z])]
             ox, oy = x + (w - LADO) // 2, y + (h - LADO) // 2
@@ -158,7 +212,10 @@ while True:
         break
     if tecla == ord("g"):
         CONFIG.write_text(json.dumps(valores, indent=2) + "\n", encoding="utf-8")
-        print("gravado em", CONFIG, valores)
+        consola.log("gravado em", CONFIG, valores)
 
+    for z, evento in enumerate(eventos):
+        if evento is not None:
+            acaba(z, evento)
 camara.release()
 cv.destroyAllWindows()
